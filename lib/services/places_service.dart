@@ -1,21 +1,18 @@
 import 'dart:convert';
 import 'package:flutter/services.dart';
-import 'package:flutter_acpplaces/flutter_acpplaces.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/poi_model.dart';
+import 'aep_places_channel.dart';
 
 class PlacesService {
   static Future<List<PoiModel>> getNearbyPois(
     Position position,
     int limit,
   ) async {
-    final location = {
-      'latitude': position.latitude,
-      'longitude': position.longitude,
-    };
     try {
-      final result = await FlutterACPPlaces.getNearbyPointsOfInterest(
-        location,
+      final result = await AepPlacesChannel.getNearbyPointsOfInterest(
+        position.latitude,
+        position.longitude,
         limit,
       );
       if (result == null || result.isEmpty) return [];
@@ -24,12 +21,7 @@ class PlacesService {
           .map((p) => PoiModel.fromAcpPoi(p as Map<dynamic, dynamic>))
           .toList();
     } on PlatformException catch (e) {
-      throw PlacesException(
-        e.code == 'PLACES_SDK_UNAVAILABLE'
-            ? 'Adobe Places SDK ไม่พร้อมใช้งาน\n\nเนื่องจาก ACP SDK (1.x) ไม่เข้ากันกับ AEP SDK (5.x)\nในขณะนี้ กรุณาเพิ่ม POI เองด้วยปุ่ม +'
-            : (e.message ?? e.code),
-        sdkUnavailable: e.code == 'PLACES_SDK_UNAVAILABLE',
-      );
+      throw PlacesException(e.message ?? e.code);
     } catch (e) {
       throw PlacesException(e.toString());
     }
@@ -37,37 +29,27 @@ class PlacesService {
 
   static Future<void> processEntry(PoiModel poi) async {
     try {
-      final geofence = Geofence.createGeofence(
+      await AepPlacesChannel.processGeofenceEntry(
         poi.identifier,
         poi.latitude,
         poi.longitude,
-        poi.radius.toDouble(),
-        -1,
-      );
-      await FlutterACPPlaces.processGeofence(
-        geofence,
-        ACPPlacesRegionEventType.entry,
+        poi.radius,
       );
     } catch (_) {
-      // processGeofence errors are non-fatal for testing flow
+      // non-fatal: geofence detection still works in Dart layer
     }
   }
 
   static Future<void> processExit(PoiModel poi) async {
     try {
-      final geofence = Geofence.createGeofence(
+      await AepPlacesChannel.processGeofenceExit(
         poi.identifier,
         poi.latitude,
         poi.longitude,
-        poi.radius.toDouble(),
-        -1,
-      );
-      await FlutterACPPlaces.processGeofence(
-        geofence,
-        ACPPlacesRegionEventType.exit,
+        poi.radius,
       );
     } catch (_) {
-      // processGeofence errors are non-fatal for testing flow
+      // non-fatal: geofence detection still works in Dart layer
     }
   }
 }

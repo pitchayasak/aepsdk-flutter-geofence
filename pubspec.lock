@@ -86,20 +86,6 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  flutter_acpcore:
-    dependency: "direct overridden"
-    description:
-      path: "local_packages/flutter_acpcore"
-      relative: true
-    source: path
-    version: "2.0.1"
-  flutter_acpplaces:
-    dependency: "direct main"
-    description:
-      path: "local_packages/flutter_acpplaces"
-      relative: true
-    source: path
-    version: "2.0.1"
   flutter_aepassurance:
     dependency: "direct main"
     description:

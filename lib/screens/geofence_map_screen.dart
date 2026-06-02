@@ -88,11 +88,7 @@ class _GeofenceMapScreenState extends State<GeofenceMapScreen> {
       if (_testLocation != null) _evaluateGeofences(_testLocation!);
     } on PlacesException catch (e) {
       setState(() => _isLoading = false);
-      if (e.sdkUnavailable) {
-        _showAddPoiDialog();
-      } else {
-        _showPlacesErrorDialog(e.message);
-      }
+      _showPlacesErrorDialog(e.message);
     } catch (e) {
       setState(() => _isLoading = false);
       _snack('Error fetching POIs: $e');

@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -20,8 +22,9 @@ android {
     }
 
     val secretsFile = rootProject.file("secrets.properties")
-    val secrets = java.util.Properties().apply {
-        if (secretsFile.exists()) load(secretsFile.inputStream())
+    val secrets = Properties()
+    if (secretsFile.exists()) {
+        secretsFile.inputStream().use { secrets.load(it) }
     }
 
     defaultConfig {
@@ -44,4 +47,9 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    implementation("com.adobe.marketing.mobile:places:3.0.2")
+    implementation("com.google.android.gms:play-services-location:21.0.1")
 }
