@@ -1,7 +1,11 @@
 package com.adobe.example.aepsdk_flutter_geofence
 
+import android.content.Context
 import android.location.Location
+import android.location.LocationManager
 import android.os.Bundle
+import android.os.SystemClock
+import android.util.Log
 import com.adobe.marketing.mobile.MobileCore
 import com.adobe.marketing.mobile.Places
 import com.google.android.gms.location.Geofence
@@ -24,13 +28,62 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
-                    "getNearbyPointsOfInterest" -> handleGetNearby(call.arguments, result)
-                    "processGeofence"           -> handleProcessGeofence(call.arguments, result)
+                    "getNearbyPointsOfInterest"  -> handleGetNearby(call.arguments, result)
+                    "processGeofence"            -> handleProcessGeofence(call.arguments, result)
                     "getCurrentPointsOfInterest" -> handleGetCurrent(result)
-                    else                        -> result.notImplemented()
+                    "setMockLocation"            -> handleSetMockLocation(call.arguments, result)
+                    else                         -> result.notImplemented()
                 }
             }
     }
+
+    // ── Mock Location ────────────────────────────────────────────────────────────
+
+    private fun handleSetMockLocation(args: Any?, result: MethodChannel.Result) {
+        val map = args as? Map<*, *>
+            ?: return result.error("INVALID_ARGS", "Expected map arguments", null)
+        val lat = (map["latitude"] as Number).toDouble()
+        val lng = (map["longitude"] as Number).toDouble()
+        val lm = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+        var anySuccess = false
+        providers.forEach { provider ->
+            try {
+                // Remove ก่อน (ถ้ามีอยู่แล้ว) แล้วค่อย add ใหม่
+                try { lm.removeTestProvider(provider) } catch (_: Exception) {}
+                lm.addTestProvider(
+                    provider,
+                    false, false, false, false,
+                    true, true, true,
+                    android.location.Criteria.POWER_LOW,
+                    android.location.Criteria.ACCURACY_FINE
+                )
+                lm.setTestProviderEnabled(provider, true)
+                val mock = Location(provider).apply {
+                    latitude = lat
+                    longitude = lng
+                    altitude = 0.0
+                    accuracy = 1f
+                    time = System.currentTimeMillis()
+                    elapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos()
+                }
+                lm.setTestProviderLocation(provider, mock)
+                Log.d("AEPPlaces", "mockLocation set [$provider]: lat=$lat lng=$lng")
+                anySuccess = true
+            } catch (e: Throwable) {
+                Log.e("AEPPlaces", "setMockLocation [$provider] failed: ${e.message}")
+            }
+        }
+        if (anySuccess) {
+            result.success(null)
+        } else {
+            result.error("MOCK_ERROR",
+                "ไม่สามารถตั้ง mock location ได้\n\nตรวจสอบว่า:\nSettings → Developer Options → Select mock location app → เลือก AEP Geofence",
+                null)
+        }
+    }
+
+    // ── AEP Places ───────────────────────────────────────────────────────────────
 
     private fun handleGetNearby(args: Any?, result: MethodChannel.Result) {
         val map = args as? Map<*, *>
@@ -40,13 +93,24 @@ class MainActivity : FlutterActivity() {
             longitude = (map["longitude"] as Number).toDouble()
         }
         val limit = (map["limit"] as Number).toInt()
+        Log.d("AEPPlaces", "getNearbyPOIs lat=${location.latitude} lng=${location.longitude} limit=$limit")
         try {
             Places.getNearbyPointsOfInterest(
                 location, limit,
-                { pois -> runOnUiThread { result.success(poisToJson(pois)) } },
-                { error -> runOnUiThread { result.error("PLACES_ERROR", error?.name ?: "unknown", null) } }
+                { pois ->
+                    Log.d("AEPPlaces", "success: ${pois?.size ?: 0} POIs returned")
+                    pois?.forEach {
+                        Log.d("AEPPlaces", "  POI: ${it.javaClass.getMethod("getName").invoke(it)}")
+                    }
+                    runOnUiThread { result.success(poisToJson(pois)) }
+                },
+                { error ->
+                    Log.e("AEPPlaces", "error callback: ${error?.name}")
+                    runOnUiThread { result.error("PLACES_ERROR", error?.name ?: "unknown", null) }
+                }
             )
         } catch (e: Throwable) {
+            Log.e("AEPPlaces", "exception: ${e.message}")
             result.error("PLACES_ERROR", e.message, null)
         }
     }
@@ -87,7 +151,6 @@ class MainActivity : FlutterActivity() {
     private fun poisToJson(pois: List<*>?): String {
         val arr = JSONArray()
         pois?.forEach { poi ->
-            // Use reflection to avoid direct PlacesPOI class reference issues
             if (poi == null) return@forEach
             val cls = poi.javaClass
             val obj = JSONObject()

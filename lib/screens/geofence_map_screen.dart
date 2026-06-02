@@ -6,6 +6,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/poi_model.dart';
+import '../services/aep_places_channel.dart';
 import '../services/places_service.dart';
 import '../widgets/add_poi_dialog.dart';
 import '../widgets/poi_bottom_sheet.dart';
@@ -19,7 +20,19 @@ class GeofenceMapScreen extends StatefulWidget {
 
 class _GeofenceMapScreenState extends State<GeofenceMapScreen> {
   final Completer<GoogleMapController> _mapController = Completer();
-  Position? _currentPosition;
+  // เริ่มต้นที่ Lotus Bangkapi จนกว่า GPS จริงจะพร้อม
+  Position _currentPosition = Position(
+    latitude: 13.7657,
+    longitude: 100.6331,
+    timestamp: DateTime.now(),
+    accuracy: 0,
+    altitude: 0,
+    altitudeAccuracy: 0,
+    heading: 0,
+    headingAccuracy: 0,
+    speed: 0,
+    speedAccuracy: 0,
+  );
   LatLng? _testLocation; // user-draggable test pin
   List<PoiModel> _pois = [];
   Set<Marker> _markers = {};
@@ -42,14 +55,18 @@ class _GeofenceMapScreenState extends State<GeofenceMapScreen> {
   // ── Location ────────────────────────────────────────────────────────────────
 
   Future<void> _initLocation() async {
-    final status = await Permission.locationWhenInUse.request();
-    if (!status.isGranted) return;
-    final pos = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-    );
-    setState(() => _currentPosition = pos);
-    // ไม่ animate ตอน init — map อยู่ที่ Lotus Bangkapi เสมอ
-    // กดปุ่ม "center on me" เพื่อไปที่ GPS จริง
+    // ขอ permission เท่านั้น ไม่ดึง GPS — ปล่อยให้ _currentPosition
+    // อยู่ที่ Lotus Bangkapi จนกว่าผู้ใช้จะกด "center on me"
+    await Permission.locationWhenInUse.request();
+  }
+
+  Future<void> _refreshGpsPosition() async {
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+      setState(() => _currentPosition = pos);
+    } catch (_) {}
   }
 
   Future<void> _animateToPosition(LatLng target) async {
@@ -72,26 +89,26 @@ class _GeofenceMapScreenState extends State<GeofenceMapScreen> {
   // ── POI fetch ────────────────────────────────────────────────────────────────
 
   Future<void> _fetchNearbyPois() async {
-    if (_currentPosition == null) {
-      _snack('Location not available yet');
-      return;
-    }
     setState(() => _isLoading = true);
+    final lat = _currentPosition.latitude.toStringAsFixed(5);
+    final lng = _currentPosition.longitude.toStringAsFixed(5);
     try {
-      final pois = await PlacesService.getNearbyPois(_currentPosition!, _poiLimit);
+      final pois = await PlacesService.getNearbyPois(_currentPosition, _poiLimit);
       _buildMapOverlays(pois);
       setState(() {
         _pois = pois;
         _isLoading = false;
       });
-      if (pois.isEmpty) _snack('No POIs found — ลองเพิ่ม POI เองด้วยปุ่ม +');
+      if (pois.isEmpty) {
+        _snack('ไม่พบ POI ที่ ($lat, $lng) — ตรวจสอบ Places Library ใน Adobe Launch');
+      }
       if (_testLocation != null) _evaluateGeofences(_testLocation!);
     } on PlacesException catch (e) {
       setState(() => _isLoading = false);
-      _showPlacesErrorDialog(e.message);
+      _showPlacesErrorDialog('($lat, $lng)\n\n${e.message}');
     } catch (e) {
       setState(() => _isLoading = false);
-      _snack('Error fetching POIs: $e');
+      _snack('Error: $e');
     }
   }
 
@@ -144,6 +161,25 @@ class _GeofenceMapScreenState extends State<GeofenceMapScreen> {
   }
 
   void _moveTestLocation(LatLng pos) {
+    // ตั้ง mock GPS บน emulator ให้ตรงกับ test location ที่ปัก
+    AepPlacesChannel.setMockLocation(pos.latitude, pos.longitude).then((err) {
+      if (err != null && mounted) _snack('Mock GPS: $err');
+    });
+
+    // อัปเดต _currentPosition ด้วย เพื่อให้ GET NEARBY POIs ค้นหาจากจุดนี้
+    _currentPosition = Position(
+      latitude: pos.latitude,
+      longitude: pos.longitude,
+      timestamp: DateTime.now(),
+      accuracy: 1,
+      altitude: 0,
+      altitudeAccuracy: 0,
+      heading: 0,
+      headingAccuracy: 0,
+      speed: 0,
+      speedAccuracy: 0,
+    );
+
     final markers = Set<Marker>.from(
       _markers.where((m) => m.markerId != _testMarkerId),
     )..add(_buildTestMarker(pos));
@@ -159,11 +195,11 @@ class _GeofenceMapScreenState extends State<GeofenceMapScreen> {
   void _showSetLocationDialog() {
     final latCtrl = TextEditingController(
       text: _testLocation?.latitude.toStringAsFixed(6) ??
-          _currentPosition?.latitude.toStringAsFixed(6) ?? '',
+          _currentPosition.latitude.toStringAsFixed(6),
     );
     final lngCtrl = TextEditingController(
       text: _testLocation?.longitude.toStringAsFixed(6) ??
-          _currentPosition?.longitude.toStringAsFixed(6) ?? '',
+          _currentPosition.longitude.toStringAsFixed(6),
     );
 
     showDialog(
@@ -375,9 +411,8 @@ class _GeofenceMapScreenState extends State<GeofenceMapScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AddPoiDialog(
-        defaultLocation: _testLocation ?? (_currentPosition != null
-            ? LatLng(_currentPosition!.latitude, _currentPosition!.longitude)
-            : const LatLng(13.7657, 100.6331)),
+        defaultLocation: _testLocation ??
+            LatLng(_currentPosition.latitude, _currentPosition.longitude),
         onAdd: (poi) {
           Navigator.pop(ctx);
           _addManualPoi(poi);
@@ -426,9 +461,7 @@ class _GeofenceMapScreenState extends State<GeofenceMapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final initialTarget = _currentPosition != null
-        ? LatLng(_currentPosition!.latitude, _currentPosition!.longitude)
-        : const LatLng(13.7657, 100.6331);
+    final initialTarget = LatLng(_currentPosition.latitude, _currentPosition.longitude);
 
     return Scaffold(
       appBar: AppBar(
@@ -480,13 +513,11 @@ class _GeofenceMapScreenState extends State<GeofenceMapScreen> {
                 _MapIconButton(
                   icon: Icons.my_location,
                   tooltip: 'Center on me',
-                  onTap: () {
-                    if (_currentPosition != null) {
-                      _animateToPosition(LatLng(
-                        _currentPosition!.latitude,
-                        _currentPosition!.longitude,
-                      ));
-                    }
+                  onTap: () async {
+                    await _refreshGpsPosition();
+                    _animateToPosition(
+                      LatLng(_currentPosition.latitude, _currentPosition.longitude),
+                    );
                   },
                 ),
               ],
