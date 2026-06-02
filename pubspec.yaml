@@ -1,0 +1,33 @@
+name: aepsdk_flutter_geofence
+description: "AEP SDK Flutter Geofence Demo with Google Maps."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  flutter_aepcore: ^5.0.1
+  flutter_aepassurance: ^5.0.0
+  flutter_acpplaces: ^2.0.1
+  google_maps_flutter: ^2.9.0
+  geolocator: ^13.0.0
+  permission_handler: ^11.3.1
+
+dependency_overrides:
+  flutter_acpcore:
+    path: local_packages/flutter_acpcore
+  flutter_acpplaces:
+    path: local_packages/flutter_acpplaces
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
