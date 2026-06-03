@@ -75,6 +75,8 @@ class _IdentityTab extends StatefulWidget {
 class _IdentityTabState extends State<_IdentityTab> {
   final _emailCtrl = TextEditingController();
   final _crmCtrl = TextEditingController();
+  // Custom identifiers (key/value pairs เพิ่มได้ไม่จำกัด)
+  final List<_CustomIdEntry> _customIds = [_CustomIdEntry()];
   String _ecid = '';
   bool _loading = false;
 
@@ -92,20 +94,27 @@ class _IdentityTabState extends State<_IdentityTab> {
   }
 
   Future<void> _syncIdentifiers() async {
-    if (_emailCtrl.text.isEmpty && _crmCtrl.text.isEmpty) return;
     setState(() => _loading = true);
     try {
-      // syncIdentifiersWithAuthState รับ Map ทั้งหมดพร้อมกัน
       final ids = <String, String>{};
       if (_emailCtrl.text.isNotEmpty) ids['Email'] = _emailCtrl.text.trim();
       if (_crmCtrl.text.isNotEmpty) ids['lumaCRMId'] = _crmCtrl.text.trim();
-      if (ids.isNotEmpty) {
-        await Identity.syncIdentifiersWithAuthState(
-          ids,
-          MobileVisitorAuthenticationState.authenticated,
-        );
+      // เพิ่ม custom identifiers ที่ผู้ใช้กำหนดเอง
+      for (final entry in _customIds) {
+        if (entry.typeCtrl.text.isNotEmpty && entry.valueCtrl.text.isNotEmpty) {
+          ids[entry.typeCtrl.text.trim()] = entry.valueCtrl.text.trim();
+        }
       }
-      _snack('Identifiers synced ✓');
+      if (ids.isEmpty) {
+        _snack('กรุณากรอกข้อมูลอย่างน้อย 1 ช่อง');
+        setState(() => _loading = false);
+        return;
+      }
+      await Identity.syncIdentifiersWithAuthState(
+        ids,
+        MobileVisitorAuthenticationState.authenticated,
+      );
+      _snack('Synced ${ids.length} identifier(s) ✓\n${ids.entries.map((e) => '${e.key}: ${e.value}').join(', ')}');
     } catch (e) {
       _snack('Error: $e');
     }
@@ -180,7 +189,56 @@ class _IdentityTabState extends State<_IdentityTab> {
                   border: OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 12),
+              const Divider(height: 20),
+              // ── Custom Identifiers ──────────────────────────────
+              Row(
+                children: [
+                  Text('Custom Identifiers', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.indigo[800])),
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed: () => setState(() => _customIds.add(_CustomIdEntry())),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Add'),
+                  ),
+                ],
+              ),
+              ..._customIds.asMap().entries.map((e) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 4,
+                      child: TextField(
+                        controller: e.value.typeCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Type (เช่น memberId)',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      flex: 4,
+                      child: TextField(
+                        controller: e.value.valueCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Value',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
+                      onPressed: _customIds.length > 1
+                          ? () => setState(() => _customIds.removeAt(e.key))
+                          : null,
+                    ),
+                  ],
+                ),
+              )),
+              const SizedBox(height: 8),
               Row(
                 children: [
                   Expanded(
@@ -189,7 +247,7 @@ class _IdentityTabState extends State<_IdentityTab> {
                       icon: _loading
                           ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                           : const Icon(Icons.sync),
-                      label: const Text('Sync'),
+                      label: const Text('Sync All'),
                       style: FilledButton.styleFrom(backgroundColor: Colors.indigo[700]),
                     ),
                   ),
@@ -457,6 +515,15 @@ class _ProfileTabState extends State<_ProfileTab> {
       ],
     );
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: Custom Identifier entry (type + value pair)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CustomIdEntry {
+  final typeCtrl = TextEditingController();
+  final valueCtrl = TextEditingController();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
