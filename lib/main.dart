@@ -13,6 +13,8 @@ void main() async {
 Future<void> _initSdks() async {
   try {
     await MobileCore.setLogLevel(LogLevel.debug);
+    // Places + Assurance registered natively in MainActivity.onCreate
+    // initializeWithAppId handles Core extensions (Identity, Lifecycle, Signal)
     await MobileCore.initializeWithAppId(appId: AppConfig.adobeAppId);
   } catch (e) {
     debugPrint('AEP SDK init error: $e');

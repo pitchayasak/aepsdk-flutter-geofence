@@ -3,6 +3,14 @@ import 'package:flutter/services.dart';
 class AepPlacesChannel {
   static const _channel = MethodChannel('aep_places_channel');
 
+  /// Initialize AEP SDK natively: register Places + Assurance + configureWithAppID
+  /// เรียกก่อน MobileCore.initializeWithAppId เพื่อให้ Assurance มี OrgId พร้อม
+  static Future<void> initializeNative(String appId) async {
+    try {
+      await _channel.invokeMethod('initializeNative', {'appId': appId});
+    } catch (_) {}
+  }
+
   static Future<String?> getNearbyPointsOfInterest(
     double lat,
     double lng,

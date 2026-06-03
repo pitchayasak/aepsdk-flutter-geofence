@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_aepcore/flutter_aepcore.dart';
 import 'package:flutter_aepcore/flutter_aepidentity.dart';
 import 'package:flutter_aepuserprofile/flutter_aepuserprofile.dart';
+import '../services/edge_service.dart';
 
 class IdentityScreen extends StatefulWidget {
   const IdentityScreen({super.key});
@@ -18,7 +19,7 @@ class _IdentityScreenState extends State<IdentityScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 4, vsync: this);
+    _tabs = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -45,6 +46,7 @@ class _IdentityScreenState extends State<IdentityScreen>
             Tab(icon: Icon(Icons.track_changes), text: 'Track'),
             Tab(icon: Icon(Icons.manage_accounts), text: 'Profile'),
             Tab(icon: Icon(Icons.privacy_tip), text: 'PII'),
+            Tab(icon: Icon(Icons.hub), text: 'Edge'),
           ],
         ),
       ),
@@ -55,6 +57,7 @@ class _IdentityScreenState extends State<IdentityScreen>
           _TrackTab(),
           _ProfileTab(),
           _PiiTab(),
+          _EdgeTab(),
         ],
       ),
     );
@@ -73,9 +76,9 @@ class _IdentityTab extends StatefulWidget {
 }
 
 class _IdentityTabState extends State<_IdentityTab> {
-  final _emailCtrl = TextEditingController();
-  final _crmCtrl = TextEditingController();
-  final _cifCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController(text: 'psena_cedp@gmail.com');
+  final _crmCtrl = TextEditingController(text: '112ca06ed53d3db37e4cea49cc45b71e');
+  final _cifCtrl = TextEditingController(text: '999654321');
   // Custom identifiers (key/value pairs เพิ่มได้ไม่จำกัด)
   final List<_CustomIdEntry> _customIds = [_CustomIdEntry()];
   String _ecid = '';
@@ -622,6 +625,167 @@ class _PiiTabState extends State<_PiiTab> {
             ],
           ),
         ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TAB 5: AEP Edge
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _EdgeTab extends StatefulWidget {
+  const _EdgeTab();
+  @override
+  State<_EdgeTab> createState() => _EdgeTabState();
+}
+
+class _EdgeTabState extends State<_EdgeTab> {
+  // Identity XDM
+  final _emailCtrl   = TextEditingController(text: 'psena_cedp@gmail.com');
+  final _crmCtrl     = TextEditingController(text: '112ca06ed53d3db37e4cea49cc45b71e');
+  final _cifCtrl     = TextEditingController(text: '999654321');
+
+  // Custom XDM Event
+  final _eventTypeCtrl = TextEditingController(text: 'commerce.purchases');
+  final _xdmCtrl = TextEditingController(
+    text: '{\n  "commerce": {\n    "purchases": {"value": 1}\n  }\n}',
+  );
+  final _freeFormCtrl = TextEditingController(text: '{"orderTotal": "99.00"}');
+
+  final List<String> _log = [];
+  bool _loading = false;
+
+  void _addLog(String msg) => setState(() => _log.insert(0, msg));
+
+  Future<void> _sendIdentityXdm() async {
+    setState(() => _loading = true);
+    try {
+      final handles = await EdgeService.sendIdentityEvent(
+        email: _emailCtrl.text.trim(),
+        lumaCRMId: _crmCtrl.text.trim(),
+        cif: _cifCtrl.text.trim(),
+      );
+      _addLog('identity.update → ${handles.length} handle(s) received ✓');
+    } catch (e) {
+      _addLog('Error: $e');
+    }
+    setState(() => _loading = false);
+  }
+
+  Future<void> _sendCustomXdm() async {
+    setState(() => _loading = true);
+    try {
+      final Map<String, dynamic> xdm = jsonDecode(_xdmCtrl.text);
+      Map<String, dynamic>? freeForm;
+      if (_freeFormCtrl.text.trim().isNotEmpty) {
+        freeForm = jsonDecode(_freeFormCtrl.text);
+      }
+      final handles = await EdgeService.sendCustomEvent(
+        eventType: _eventTypeCtrl.text.trim(),
+        xdmData: xdm,
+        freeFormData: freeForm,
+      );
+      _addLog('${_eventTypeCtrl.text} → ${handles.length} handle(s) received ✓');
+    } catch (e) {
+      _addLog('Error: $e');
+    }
+    setState(() => _loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.blue[50],
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.blue.shade200),
+          ),
+          child: const Row(children: [
+            Icon(Icons.hub, color: Colors.blue, size: 18),
+            SizedBox(width: 8),
+            Expanded(child: Text(
+              'ส่งข้อมูลไปยัง Adobe Edge Network ในรูปแบบ XDM Schema',
+              style: TextStyle(fontSize: 13),
+            )),
+          ]),
+        ),
+        const SizedBox(height: 12),
+
+        // Identity XDM
+        _SectionCard(
+          title: 'Identity XDM Event',
+          child: Column(children: [
+            TextField(controller: _emailCtrl,
+              decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email), border: OutlineInputBorder(), isDense: true)),
+            const SizedBox(height: 8),
+            TextField(controller: _crmCtrl,
+              decoration: const InputDecoration(labelText: 'lumaCRMId', prefixIcon: Icon(Icons.badge), border: OutlineInputBorder(), isDense: true)),
+            const SizedBox(height: 8),
+            TextField(controller: _cifCtrl,
+              decoration: const InputDecoration(labelText: 'CIF', prefixIcon: Icon(Icons.account_balance), border: OutlineInputBorder(), isDense: true),
+              keyboardType: TextInputType.number),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _loading ? null : _sendIdentityXdm,
+                icon: const Icon(Icons.send),
+                label: const Text('Send identity.update'),
+                style: FilledButton.styleFrom(backgroundColor: Colors.indigo[700]),
+              ),
+            ),
+          ]),
+        ),
+        const SizedBox(height: 12),
+
+        // Custom XDM Event
+        _SectionCard(
+          title: 'Custom XDM Event',
+          child: Column(children: [
+            TextField(controller: _eventTypeCtrl,
+              decoration: const InputDecoration(labelText: 'eventType', prefixIcon: Icon(Icons.bolt), border: OutlineInputBorder(), isDense: true)),
+            const SizedBox(height: 8),
+            TextField(controller: _xdmCtrl,
+              decoration: const InputDecoration(labelText: 'XDM Data (JSON)', border: OutlineInputBorder()),
+              maxLines: 4,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+            const SizedBox(height: 8),
+            TextField(controller: _freeFormCtrl,
+              decoration: const InputDecoration(labelText: 'Free-form Data (JSON, optional)', border: OutlineInputBorder()),
+              maxLines: 2,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _loading ? null : _sendCustomXdm,
+                icon: const Icon(Icons.cloud_upload),
+                label: const Text('Send to Edge Network'),
+                style: FilledButton.styleFrom(backgroundColor: Colors.blue[700]),
+              ),
+            ),
+          ]),
+        ),
+
+        // Log
+        if (_log.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _SectionCard(
+            title: 'Response Log',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: _log.take(8).map((l) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Text(l, style: const TextStyle(fontSize: 12, fontFamily: 'monospace')),
+              )).toList(),
+            ),
+          ),
+        ],
       ],
     );
   }

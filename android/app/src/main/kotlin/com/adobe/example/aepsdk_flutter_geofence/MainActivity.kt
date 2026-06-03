@@ -6,8 +6,11 @@ import android.location.LocationManager
 import android.os.Bundle
 import android.os.SystemClock
 import android.util.Log
+import com.adobe.marketing.mobile.Assurance
+import com.adobe.marketing.mobile.Edge
 import com.adobe.marketing.mobile.MobileCore
 import com.adobe.marketing.mobile.Places
+import com.adobe.marketing.mobile.edge.identity.Identity
 import com.google.android.gms.location.Geofence
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -20,7 +23,18 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        MobileCore.registerExtensions(listOf(Places.EXTENSION)) {}
+        val appId = BuildConfig.ADOBE_APP_ID
+        // Register Places + Assurance แล้ว configure ทันทีใน callback
+        // เพื่อให้ Assurance มี OrgId ก่อนที่จะพยายาม connect session
+        MobileCore.registerExtensions(listOf(
+            Places.EXTENSION,
+            Assurance.EXTENSION,
+            Edge.EXTENSION,
+            Identity.EXTENSION
+        )) {
+            MobileCore.configureWithAppID(appId)
+            Log.d("AEPInit", "SDK initialized with appId: $appId")
+        }
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -28,6 +42,7 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
+                    "initializeNative"           -> handleInitializeNative(call.arguments, result)
                     "getNearbyPointsOfInterest"  -> handleGetNearby(call.arguments, result)
                     "processGeofence"            -> handleProcessGeofence(call.arguments, result)
                     "getCurrentPointsOfInterest" -> handleGetCurrent(result)
@@ -35,6 +50,30 @@ class MainActivity : FlutterActivity() {
                     else                         -> result.notImplemented()
                 }
             }
+    }
+
+    // ── Native Init ──────────────────────────────────────────────────────────────
+
+    private fun handleInitializeNative(args: Any?, result: MethodChannel.Result) {
+        val map = args as? Map<*, *>
+            ?: return result.error("INVALID_ARGS", "Expected map arguments", null)
+        val appId = map["appId"] as? String
+            ?: return result.error("INVALID_ARGS", "Missing appId", null)
+        try {
+            // Register Places + Assurance แล้ว configure ใน callback
+            // เพื่อให้ Assurance อ่าน OrgId ได้ทันที
+            MobileCore.registerExtensions(listOf(
+                Places.EXTENSION,
+                Assurance.EXTENSION
+            )) {
+                MobileCore.configureWithAppID(appId)
+                Log.d("AEPInit", "Native extensions registered + configured: $appId")
+            }
+            result.success(null)
+        } catch (e: Throwable) {
+            Log.e("AEPInit", "initializeNative failed: ${e.message}")
+            result.error("INIT_ERROR", e.message, null)
+        }
     }
 
     // ── Mock Location ────────────────────────────────────────────────────────────

@@ -5,6 +5,7 @@ import 'package:flutter_aepcore/flutter_aepidentity.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/poi_model.dart';
 import 'aep_places_channel.dart';
+import 'edge_service.dart';
 
 class PlacesService {
   static Future<List<PoiModel>> getNearbyPois(
@@ -40,8 +41,10 @@ class PlacesService {
       );
     } catch (_) {}
 
-    // 2. trackAction พร้อม POI data + identity ที่ sync ไว้ใน payload
+    // 2. trackAction (Analytics) พร้อม POI data + identity
     await _trackGeofenceEvent('places_poi_entry', poi);
+    // 3. Edge Network — XDM event ส่งตรงไป Adobe Experience Platform
+    EdgeService.sendPoiEntry(poi);
   }
 
   static Future<void> processExit(PoiModel poi) async {
@@ -55,6 +58,7 @@ class PlacesService {
     } catch (_) {}
 
     await _trackGeofenceEvent('places_poi_exit', poi);
+    EdgeService.sendPoiExit(poi);
   }
 
   /// ส่ง trackAction พร้อม POI info + identity ที่มีอยู่ใน event payload

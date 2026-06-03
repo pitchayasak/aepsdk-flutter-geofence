@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../models/poi_model.dart';
 import '../services/aep_places_channel.dart';
 import '../services/places_service.dart';
+import '../config.dart';
 import '../widgets/add_poi_dialog.dart';
 import '../widgets/poi_bottom_sheet.dart';
 import 'identity_screen.dart';
@@ -433,27 +434,100 @@ class _GeofenceMapScreenState extends State<GeofenceMapScreen> {
 
   void _showAssuranceDialog() {
     final ctrl = TextEditingController();
+    bool connecting = false;
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Assurance Session'),
-        content: TextField(
-          controller: ctrl,
-          decoration: const InputDecoration(
-            labelText: 'Session URL',
-            hintText: 'griffon://?adb_validation_sessionid=...',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Row(children: [
+            Icon(Icons.security, color: Colors.indigo),
+            SizedBox(width: 8),
+            Text('Assurance Session'),
+          ]),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.indigo[50],
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline, size: 14, color: Colors.indigo),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'App ID: ${AppConfig.adobeAppId}',
+                        style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Session URL',
+                  hintText: 'griffon://?adb_validation_sessionid=...',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'AEP → Assurance → Create Session\n→ Copy Link → วางที่นี่',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
           ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: connecting ? null : () async {
+                final url = ctrl.text.trim();
+                if (url.isEmpty) return;
+                setDialogState(() => connecting = true);
+                try {
+                  await Assurance.startSession(url);
+                  if (!ctx.mounted) return;
+                  Navigator.pop(ctx);
+                  // ignore: use_build_context_synchronously
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Assurance connecting... ตรวจสอบใน Adobe Experience Platform'),
+                      duration: Duration(seconds: 4),
+                    ),
+                  );
+                } catch (e) {
+                  final msg = e.toString();
+                  final isAlreadyExists = msg.toLowerCase().contains('already exist') ||
+                      msg.toLowerCase().contains('session already');
+                  setDialogState(() => connecting = false);
+                  if (!ctx.mounted) return;
+                  Navigator.pop(ctx);
+                  // ignore: use_build_context_synchronously
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(isAlreadyExists
+                          ? '✅ Assurance session กำลัง active อยู่แล้ว — ตรวจสอบใน Adobe Experience Platform'
+                          : 'Error: $msg'),
+                      backgroundColor: isAlreadyExists ? Colors.green[700] : Colors.red,
+                      duration: const Duration(seconds: 5),
+                    ),
+                  );
+                }
+              },
+              child: connecting
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('Connect'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () {
-              if (ctrl.text.isNotEmpty) Assurance.startSession(ctrl.text);
-              Navigator.pop(ctx);
-            },
-            child: const Text('Connect'),
-          ),
-        ],
       ),
     );
   }
