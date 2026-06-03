@@ -75,6 +75,7 @@ class _IdentityTab extends StatefulWidget {
 class _IdentityTabState extends State<_IdentityTab> {
   final _emailCtrl = TextEditingController();
   final _crmCtrl = TextEditingController();
+  final _cifCtrl = TextEditingController();
   // Custom identifiers (key/value pairs เพิ่มได้ไม่จำกัด)
   final List<_CustomIdEntry> _customIds = [_CustomIdEntry()];
   String _ecid = '';
@@ -99,6 +100,7 @@ class _IdentityTabState extends State<_IdentityTab> {
       final ids = <String, String>{};
       if (_emailCtrl.text.isNotEmpty) ids['Email'] = _emailCtrl.text.trim();
       if (_crmCtrl.text.isNotEmpty) ids['lumaCRMId'] = _crmCtrl.text.trim();
+      if (_cifCtrl.text.isNotEmpty) ids['CIF'] = _cifCtrl.text.trim();
       // เพิ่ม custom identifiers ที่ผู้ใช้กำหนดเอง
       for (final entry in _customIds) {
         if (entry.typeCtrl.text.isNotEmpty && entry.valueCtrl.text.isNotEmpty) {
@@ -188,6 +190,16 @@ class _IdentityTabState extends State<_IdentityTab> {
                   prefixIcon: Icon(Icons.badge),
                   border: OutlineInputBorder(),
                 ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _cifCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'CIF',
+                  prefixIcon: Icon(Icons.account_balance),
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
               ),
               const Divider(height: 20),
               // ── Custom Identifiers ──────────────────────────────
