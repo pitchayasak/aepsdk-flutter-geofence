@@ -1,17 +1,24 @@
 # AEP SDK Flutter Geofence
 
-Flutter app สำหรับทดสอบ Adobe Experience Platform (AEP) Places Geofence บน Android
-แสดงแผนที่ Google Maps, ดึง POI จาก Adobe Places, และตรวจจับ entry/exit geofence
+Flutter app สำหรับทดสอบ Adobe Experience Platform (AEP) Places Geofence บน Android  
+แสดงแผนที่ Google Maps, ดึง POI จาก Adobe Places, ตรวจจับ entry/exit geofence และส่ง identity/tracking events
+
+---
 
 ## Features
 
-- แผนที่ Google Maps พร้อม POI markers และ geofence circle overlay
-- ดึง Nearby POIs จาก Adobe Places SDK 3.x
-- กดค้างบนแผนที่เพื่อตั้ง test location + mock GPS บน emulator
-- ตรวจจับ entry/exit อัตโนมัติพร้อม dialog แจ้งเตือน
-- ส่ง processGeofence event ไปยัง Adobe Places
-- เพิ่ม POI เองสำหรับทดสอบ (ปุ่ม + บนแผนที่)
-- AEP Assurance สำหรับ debug events
+| หมวด | รายละเอียด |
+|------|-----------|
+| 🗺️ แผนที่ | Google Maps พร้อม POI markers, geofence circle overlay, zoom +/- |
+| 📍 POI | ดึง Nearby POIs จาก Adobe Places SDK 3.x |
+| 🔵 Test Location | กดค้างบนแผนที่เพื่อวาง test pin + mock GPS บน emulator |
+| 🔔 Geofence | ตรวจจับ entry/exit อัตโนมัติ + dialog แจ้งเตือน |
+| ➕ Manual POI | เพิ่ม POI เองสำหรับทดสอบ (ปุ่ม + บนแผนที่) |
+| 👤 Identity | Sync email, lumaCRMId, CIF และ custom identifiers |
+| 📊 Tracking | trackAction / trackState พร้อม context data |
+| 🧑‍💼 Profile | User Profile attributes (set/get/remove) |
+| 🔒 PII | Collect PII ผ่าน MobileCore |
+| 🛡️ Assurance | Debug AEP events แบบ real-time |
 
 ---
 
@@ -19,44 +26,36 @@ Flutter app สำหรับทดสอบ Adobe Experience Platform (AEP) Pl
 
 ### 1. Google Maps API Key
 
-**สร้าง API Key:**
 1. ไปที่ [Google Cloud Console](https://console.cloud.google.com)
-2. สร้างหรือเลือก Project
-3. ไปที่ **APIs & Services → Credentials → Create Credentials → API key**
-4. ไปที่ **APIs & Services → Library** แล้วเปิดใช้ **Maps SDK for Android**
-5. (แนะนำ) จำกัด key ให้ใช้ได้เฉพาะ Android app ด้วย package name `com.adobe.example.aepsdk_flutter_geofence`
-
-**ใส่ค่าใน project:**
+2. **APIs & Services → Credentials → Create Credentials → API key**
+3. **APIs & Services → Library** → เปิดใช้ **Maps SDK for Android**
+4. (แนะนำ) จำกัด key ด้วย package name `com.adobe.example.aepsdk_flutter_geofence`
 
 ```bash
-# คัดลอก template
 cp android/secrets.properties.example android/secrets.properties
 ```
 
 แก้ไข `android/secrets.properties`:
 ```properties
 MAPS_API_KEY=AIzaSy...YOUR_KEY_HERE
+ADOBE_APP_ID=xxxx/xxxx/launch-xxxx-development
 ```
 
-> ไฟล์ `secrets.properties` อยู่ใน `.gitignore` จะไม่ถูก commit
+> `secrets.properties` อยู่ใน `.gitignore` — ไม่ถูก commit
 
 ---
 
 ### 2. Adobe App ID
 
-**หา App ID:**
 1. ไปที่ [Adobe Experience Platform Data Collection](https://experience.adobe.com/#/data-collection)
-2. เลือก **Mobile Property** ที่ต้องการ
-3. ไปที่ **Environments** → คัดลอก **App ID** ของ environment ที่ต้องการ (Development / Staging / Production)
+2. เลือก **Mobile Property** → **Environments** → คัดลอก **App ID**
 
-**ตรวจสอบว่า Property มี Extensions ต่อไปนี้ติดตั้งแล้ว:**
+**Extensions ที่ต้องติดตั้งใน Mobile Property:**
 - Mobile Core
-- Adobe Experience Platform Places
-
-**ใส่ค่าใน project:**
+- Places
+- (แนะนำ) Assurance
 
 ```bash
-# คัดลอก template
 cp lib/config.example.dart lib/config.dart
 ```
 
@@ -67,7 +66,7 @@ class AppConfig {
 }
 ```
 
-> ไฟล์ `lib/config.dart` อยู่ใน `.gitignore` จะไม่ถูก commit
+> `lib/config.dart` อยู่ใน `.gitignore` — ไม่ถูก commit
 
 ---
 
@@ -83,47 +82,58 @@ flutter pub get
 
 ### เปิด Developer Options
 
-1. เปิด **Settings** บน emulator
-2. ไปที่ **About emulated device**
-3. กด **Build number** 7 ครั้งติดต่อกัน จนขึ้นข้อความ "You are now a developer!"
-4. กลับไปที่ **Settings → System → Developer Options** (หรือ Settings → Developer Options ขึ้นอยู่กับ Android version)
+1. **Settings → About emulated device**
+2. กด **Build number** 7 ครั้ง จนขึ้น "You are now a developer!"
+3. กลับไปที่ **Settings → System → Developer Options**
 
 ### ตั้งค่า Mock Location App
 
-1. ใน **Developer Options** เลื่อนหา **Select mock location app**
+1. ใน **Developer Options** → **Select mock location app**
 2. เลือก **AEP Geofence**
 
-> หลังจากตั้งค่าแล้ว เมื่อกดค้างบนแผนที่ใน app, GPS ของ emulator จะถูกตั้งค่าไปที่จุดที่ปักทันที ทำให้ blue dot (My Location) และ Adobe Places ใช้พิกัดเดียวกัน
+> หลังตั้งค่าแล้ว การกดค้างบนแผนที่จะ set GPS ของ emulator ไปที่จุดนั้นทันที
 
 ---
 
 ## วิธีรัน
 
 ```bash
-# รันบน emulator ที่เชื่อมต่ออยู่
-flutter run
-
-# ระบุ device
-flutter run -d emulator-5554
+flutter run                      # รันบน emulator ที่เชื่อมต่ออยู่
+flutter run -d emulator-5554     # ระบุ device
+flutter build apk --debug        # สร้าง APK สำหรับติดตั้งบนมือถือ
 ```
 
 ---
 
-## วิธีทดสอบ Geofence
+## วิธีใช้งาน
 
-1. เปิด app — แผนที่เริ่มต้นที่ **Lotus Bangkapi, Bangkok**
-2. กด **GET NEARBY POIs** — ดึง POI จาก Adobe Places (ต้องมี POI Library กำหนดใน Adobe Launch)
-3. ถ้าไม่มี POI → กดปุ่ม **+** (สีเขียว) เพื่อเพิ่ม POI เองสำหรับทดสอบ
-4. **กดค้างบนแผนที่** เพื่อวาง test location (marker สีฟ้า) — GPS emulator จะย้ายไปด้วย
-5. เมื่อ test location อยู่ใน radius ของ POI → dialog **"เข้าสู่ POI แล้ว!"** ขึ้นทันที
-6. ย้าย test location ออกนอก radius → dialog **"ออกจาก POI แล้ว!"**
-7. กด **ENTRY** / **EXIT** ใน POI bottom sheet เพื่อส่ง event ไปยัง Adobe Places โดยตรง
+### Geofence
 
-### AEP Assurance
+1. เปิด app — แผนที่เริ่มต้นที่ **Lotus Bangkapi, Bangkok** (13.7657, 100.6331)
+2. กด **GET NEARBY POIs** — ดึง POI จาก Adobe Places
+3. ถ้าไม่มี POI → กดปุ่ม **🟢 +** (Add POI) เพื่อเพิ่มเองสำหรับทดสอบ
+4. **กดค้างบนแผนที่** → วาง test location (marker สีฟ้า) + GPS emulator ย้ายไปด้วย
+5. test location เข้าใน radius POI → dialog **"เข้าสู่ POI แล้ว!"** + ส่ง Places event
+6. ย้ายออก → dialog **"ออกจาก POI แล้ว!"**
+7. กด marker → Bottom Sheet → กด **ENTRY / EXIT** เพื่อส่ง event โดยตรง
 
-1. กดไอคอน 🛡️ ที่ AppBar
-2. ใส่ Assurance Session URL จาก Adobe Experience Platform
-3. กด **Connect** เพื่อ debug events แบบ real-time
+### Identity & Tracking (ไอคอน 👤 ที่ AppBar)
+
+| Tab | หน้าที่ |
+|-----|--------|
+| **Identity** | Sync email, lumaCRMId, CIF และ custom identifiers ผ่าน AEP Identity API |
+| **Track** | ส่ง trackAction / trackState พร้อม JSON context data |
+| **Profile** | Set/Get/Remove user attributes ผ่าน UserProfile API |
+| **PII** | Collect PII (ชื่อ, email, เบอร์) ผ่าน MobileCore.collectPii |
+
+> Identity ที่ sync ไว้จะถูกแนบไปพร้อมกับทุก POI entry/exit event อัตโนมัติ
+
+### AEP Assurance (ไอคอน 🛡️ ที่ AppBar)
+
+1. ไปที่ [experience.adobe.com](https://experience.adobe.com) → **Assurance → Create Session**
+2. กด **Copy Link** เพื่อคัดลอก Session URL (`griffon://...`)
+3. ใน app กดไอคอน 🛡️ → วาง URL → กด **Connect**
+4. รอ ~5 วินาทีหลัง app เปิดก่อนกด Connect (ให้ startup timeout ผ่านก่อน)
 
 ---
 
@@ -133,37 +143,67 @@ flutter run -d emulator-5554
 lib/
 ├── main.dart                        # AEP SDK initialization
 ├── config.dart                      # API keys (gitignored)
-├── config.example.dart              # Template สำหรับ config.dart
+├── config.example.dart              # Template
 ├── models/
 │   └── poi_model.dart               # POI data class
 ├── screens/
-│   └── geofence_map_screen.dart     # หน้าหลัก
+│   ├── geofence_map_screen.dart     # หน้าหลัก (แผนที่ + POI)
+│   └── identity_screen.dart         # Identity & Tracking (4 tabs)
 ├── services/
 │   ├── aep_places_channel.dart      # Flutter ↔ Android MethodChannel
-│   └── places_service.dart          # AEP Places wrapper
+│   └── places_service.dart          # AEP Places + trackAction wrapper
 └── widgets/
-    ├── add_poi_dialog.dart          # Dialog เพิ่ม POI
-    └── poi_bottom_sheet.dart        # POI detail + Entry/Exit
+    ├── add_poi_dialog.dart           # Dialog เพิ่ม POI
+    └── poi_bottom_sheet.dart         # POI detail + Entry/Exit buttons
 
 android/
 ├── secrets.properties               # API keys (gitignored)
-├── secrets.properties.example       # Template สำหรับ secrets.properties
+├── secrets.properties.example       # Template
 └── app/src/main/kotlin/.../
-    └── MainActivity.kt              # AEP Places MethodChannel handler
+    └── MainActivity.kt              # Places + Assurance MethodChannel
 ```
 
 ---
 
-## Dependencies หลัก
+## Dependencies
+
+### Flutter Packages
 
 | Package | Version | หน้าที่ |
 |---------|---------|--------|
-| flutter_aepcore | ^5.0.1 | AEP Mobile Core |
+| flutter_aepcore | ^5.0.1 | AEP Mobile Core + Identity |
 | flutter_aepassurance | ^5.0.0 | AEP Assurance |
+| flutter_aepuserprofile | ^5.0.0 | User Profile |
 | google_maps_flutter | ^2.9.0 | Google Maps |
-| geolocator | ^13.0.0 | GPS |
+| geolocator | ^13.0.0 | GPS location |
 | permission_handler | ^11.3.1 | Location permissions |
 
-**Native Android (ผ่าน MethodChannel):**
-- `com.adobe.marketing.mobile:places:3.0.2` — AEP Places SDK
-- `com.google.android.gms:play-services-location:21.0.1` — Geofence API
+### Native Android (ผ่าน MethodChannel)
+
+| Artifact | Version | หน้าที่ |
+|----------|---------|--------|
+| `com.adobe.marketing.mobile:places` | 3.0.2 | AEP Places SDK |
+| `com.adobe.marketing.mobile:assurance` | 3.0.1 | AEP Assurance native |
+| `com.google.android.gms:play-services-location` | 21.0.1 | Geofence Builder |
+
+---
+
+## AEP SDK Initialization Order
+
+```
+MainActivity.onCreate
+  └── MobileCore.registerExtensions([Places, Assurance]) {
+        MobileCore.configureWithAppID(BuildConfig.ADOBE_APP_ID)  ← ต้องอยู่ใน callback
+      }
+
+main.dart (Dart)
+  └── MobileCore.initializeWithAppId(appId)  ← registers Identity, Lifecycle, Signal
+```
+
+> ⚠️ `configureWithAppID` ต้องเรียกใน callback ของ `registerExtensions` เพื่อให้ Assurance อ่าน OrgId ได้ทันที
+
+---
+
+## Known Issues & Solutions
+
+ดู [`build_issues.md`](build_issues.md) สำหรับรายละเอียดปัญหาที่พบและวิธีแก้ไขระหว่างการพัฒนา
