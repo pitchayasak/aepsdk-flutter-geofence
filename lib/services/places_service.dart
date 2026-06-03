@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/services.dart';
+import 'package:flutter_aepcore/flutter_aepcore.dart';
+import 'package:flutter_aepcore/flutter_aepidentity.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/poi_model.dart';
 import 'aep_places_channel.dart';
@@ -28,6 +30,7 @@ class PlacesService {
   }
 
   static Future<void> processEntry(PoiModel poi) async {
+    // 1. ส่ง Places processGeofence (แนบ ECID อัตโนมัติ)
     try {
       await AepPlacesChannel.processGeofenceEntry(
         poi.identifier,
@@ -35,9 +38,10 @@ class PlacesService {
         poi.longitude,
         poi.radius,
       );
-    } catch (_) {
-      // non-fatal: geofence detection still works in Dart layer
-    }
+    } catch (_) {}
+
+    // 2. trackAction พร้อม POI data + identity ที่ sync ไว้ใน payload
+    await _trackGeofenceEvent('places_poi_entry', poi);
   }
 
   static Future<void> processExit(PoiModel poi) async {
@@ -48,9 +52,33 @@ class PlacesService {
         poi.longitude,
         poi.radius,
       );
-    } catch (_) {
-      // non-fatal: geofence detection still works in Dart layer
-    }
+    } catch (_) {}
+
+    await _trackGeofenceEvent('places_poi_exit', poi);
+  }
+
+  /// ส่ง trackAction พร้อม POI info + identity ที่มีอยู่ใน event payload
+  static Future<void> _trackGeofenceEvent(String action, PoiModel poi) async {
+    try {
+      // ดึง identifiers ที่ sync ไว้ (email, lumaCRMId, custom ฯลฯ)
+      final identifiers = await Identity.identifiers;
+      final identityData = <String, String>{};
+      for (final id in identifiers) {
+        identityData['identity.${id.idType}'] = id.identifier;
+      }
+
+      final contextData = <String, String>{
+        'poi.identifier': poi.identifier,
+        'poi.name': poi.name,
+        'poi.latitude': poi.latitude.toStringAsFixed(6),
+        'poi.longitude': poi.longitude.toStringAsFixed(6),
+        'poi.radius': poi.radius.toString(),
+        if (poi.category != null) 'poi.category': poi.category!,
+        ...identityData, // แนบ identity ทั้งหมดเข้า event
+      };
+
+      await MobileCore.trackAction(action, data: contextData);
+    } catch (_) {}
   }
 }
 
