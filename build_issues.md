@@ -237,11 +237,56 @@ ScaffoldMessenger.of(context).showSnackBar(SnackBar(
 
 ---
 
+## 11. AEP Edge — `EdgeIdentity` ต้องใช้ import ที่ต่างออกไป
+
+**ปัญหา:**  
+ต้องการ register Edge Identity extension ใน `MainActivity.kt` แต่ `Identity` class มี 2 ตัว — AEP Core Identity และ Edge Identity ซึ่งต้องระวัง import ไม่ให้ชนกัน
+
+**วิธีแก้:**  
+ใช้ full package path ที่ถูกต้องสำหรับ Edge Identity
+
+```kotlin
+import com.adobe.marketing.mobile.edge.identity.Identity  // Edge Identity
+// ไม่ใช่ com.adobe.marketing.mobile.Identity              // Core Identity
+```
+
+และเพิ่ม native dependency ใน `build.gradle.kts`:
+
+```kotlin
+dependencies {
+    implementation("com.adobe.marketing.mobile:edge:3.0.0")
+    implementation("com.adobe.marketing.mobile:edgeidentity:3.0.0")
+}
+```
+
+---
+
 ## สรุป SDK ที่ใช้งานจริง
 
 | Extension | วิธี Register | หมายเหตุ |
 |-----------|--------------|----------|
 | AEP Core | `MobileCore.initializeWithAppId` (Dart) | auto-registers Identity, Lifecycle, Signal |
-| AEP Places | `MobileCore.registerExtensions([Places.EXTENSION])` (native) | ต้อง configure ในcallback |
+| AEP Places | `MobileCore.registerExtensions([Places.EXTENSION])` (native) | ต้อง configure ใน callback |
 | AEP Assurance | `MobileCore.registerExtensions([Assurance.EXTENSION])` (native) | ต้อง configure ก่อน session start |
+| AEP Edge | `MobileCore.registerExtensions([Edge.EXTENSION])` (native) | ส่ง XDM events ไป Edge Network |
+| Edge Identity | `MobileCore.registerExtensions([Identity.EXTENSION])` (native) | `com.adobe.marketing.mobile.edge.identity.Identity` |
 | UserProfile | auto via `flutter_aepuserprofile` plugin | — |
+
+---
+
+## สรุป Data Flow
+
+```
+POI Entry/Exit
+  ├── Places.processGeofence          → Adobe Places backend
+  ├── MobileCore.trackAction          → Analytics (พร้อม identity context data)
+  └── Edge.sendEvent (XDM)            → Adobe Edge Network → AEP
+
+Identity Sync
+  ├── Identity.syncIdentifiersWithAuthState  → AEP Identity (เชื่อมกับ ECID)
+  └── Edge.sendEvent (identityMap XDM)       → Adobe Edge Network → AEP
+
+Custom Tracking
+  ├── MobileCore.trackAction/State    → Analytics
+  └── Edge.sendEvent (custom XDM)     → Adobe Edge Network → AEP
+```
