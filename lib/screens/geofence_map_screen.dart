@@ -10,6 +10,7 @@ import '../services/aep_places_channel.dart';
 import '../services/places_service.dart';
 import '../widgets/add_poi_dialog.dart';
 import '../widgets/poi_bottom_sheet.dart';
+import 'identity_screen.dart';
 
 class GeofenceMapScreen extends StatefulWidget {
   const GeofenceMapScreen({super.key});
@@ -469,6 +470,14 @@ class _GeofenceMapScreenState extends State<GeofenceMapScreen> {
         backgroundColor: Colors.indigo[700],
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.person),
+            tooltip: 'Identity & Tracking',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const IdentityScreen()),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.security),
             tooltip: 'Assurance',

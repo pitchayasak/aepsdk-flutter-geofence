@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_aepcore/flutter_aepcore.dart';
+
 import 'config.dart';
 import 'screens/geofence_map_screen.dart';
 
@@ -12,7 +13,6 @@ void main() async {
 Future<void> _initSdks() async {
   try {
     await MobileCore.setLogLevel(LogLevel.debug);
-    // Replace YOUR_ADOBE_APP_ID with your Adobe Launch environment App ID
     await MobileCore.initializeWithAppId(appId: AppConfig.adobeAppId);
   } catch (e) {
     debugPrint('AEP SDK init error: $e');

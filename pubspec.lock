@@ -102,6 +102,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.0.1"
+  flutter_aepuserprofile:
+    dependency: "direct main"
+    description:
+      name: flutter_aepuserprofile
+      sha256: "8007643a1ac4cc421eaabac5e2acdc8eee246dd50130cfd3cdedd4132228b1f1"
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.0.0"
   flutter_lints:
     dependency: "direct dev"
     description:
