@@ -89,20 +89,21 @@ class EdgeService {
       'eventType': eventType,
       'placeContext': {
         'POIinteraction': {
+          // poiEntries/poiExits บอก AEP ว่าเป็น entry หรือ exit
+          'poiEntries': {'value': eventType == 'location.entry' ? 1 : 0},
+          'poiExits':   {'value': eventType == 'location.exit'  ? 1 : 0},
           'poiDetail': {
             'name': poi.name,
-            'POIID': poi.identifier,
+            // ใช้ 'poiID' แทน 'POIID' เพื่อหลีกเลี่ยง duplicate column
+            'poiID': poi.identifier,
             'geoInteractionDetails': {
               'distanceToCenter': 0,
-              'accuracy': poi.radius,
+              'accuracy': poi.radius.toDouble(),
+              // ลบ _id และ _schema ออก เพราะเป็น system fields ที่ชนกัน
               'geoShape': {
-                '_id': poi.identifier,
                 'circle': {
-                  '_schema': {
-                    'description': poi.name,
-                    'radius': poi.radius,
-                    'coordinates': [poi.longitude, poi.latitude],
-                  }
+                  'radius': poi.radius.toDouble(),
+                  'coordinates': [poi.longitude, poi.latitude],
                 }
               }
             }
