@@ -274,6 +274,134 @@ dependencies {
 
 ---
 
+## 12. Edge.sendEvent ไม่ปรากฏใน Assurance (silent rejection / wrong XDM schema)
+
+**ปัญหา:**  
+`Edge.sendEvent()` ส่งสำเร็จ (2 handles returned) แต่ event ไม่ปรากฏใน Assurance `hitReceived` เพราะ Edge Network reject event เงียบๆ เนื่องจาก `geoShape.circle` structure ไม่ตรงกับ XDM schema ที่กำหนด
+
+**วิธีแก้:**  
+ลบ `geoInteractionDetails` / `geoShape.circle` ออกจาก XDM และย้าย geo data ไปใน `_data` (free-form, ไม่ผ่าน schema validation):
+
+```dart
+// ❌ ก่อน — Edge Network reject เงียบๆ
+'geoInteractionDetails': {
+  'geoShape': {
+    'circle': {'radius': ..., 'coordinates': [...]}
+  }
+}
+
+// ✅ หลัง — ผ่าน schema validation
+'poiDetail': {'name': poi.name, 'poiID': poi.identifier}
+// Geo data ใน free-form:
+'_data': {'poi': {'latitude': ..., 'longitude': ..., 'radius': ...}}
+```
+
+---
+
+## 13. `dart:developer` log ไม่แสดงใน Android Studio Logcat
+
+**ปัญหา:**  
+`dev.log('...', name: 'EdgeService')` ไม่ปรากฏเมื่อ filter Logcat ด้วย tag `EdgeService`
+
+**วิธีแก้:**  
+ใช้ `debugPrint('[EdgeService] ...')` แทน — จะแสดงใน Logcat ภายใต้ tag `flutter`
+
+```dart
+// ❌ ไม่แสดงใน Logcat
+import 'dart:developer' as dev;
+dev.log('message', name: 'EdgeService');
+
+// ✅ แสดงใน Logcat (filter: flutter)
+import 'package:flutter/foundation.dart';
+debugPrint('[EdgeService] message');
+```
+
+---
+
+## 14. `identityMap` ใน Edge events มีแค่ ECID (authenticatedState: ambiguous)
+
+**ปัญหา:**  
+ทุก Edge event แสดงเฉพาะ ECID ใน identityMap โดย email/lumaCRMId/CIF ไม่ปรากฏ แม้จะ Sync identity แล้ว
+
+**สาเหตุ:**
+1. `EdgeIdentity.updateIdentities()` อาจ fail เงียบๆ (caught exception)
+2. ไม่ได้กด Sync All ก่อนกด ENTRY/EXIT
+3. `Edge.sendPoiEntry()` ถูกเรียกแบบ fire-and-forget (ไม่มี `await`)
+
+**วิธีแก้:**
+1. Cache identities ใน `_cachedIdentityMap` และ inject เข้า XDM โดยตรงทุก `Edge.sendEvent()` call
+2. Set default identities จาก `AppConfig` ตอน app เปิด (ใน `main.dart`) — ไม่ต้อง Sync All ก่อนทุกครั้ง
+3. เพิ่ม `await` ก่อน `EdgeService.sendPoiEntry/Exit()` ใน `places_service.dart`
+
+```dart
+// main.dart — set identities at startup
+await EdgeService.updateEdgeIdentities(
+  email: AppConfig.defaultEmail,
+  lumaCRMId: AppConfig.defaultLumaCRMId,
+  cif: AppConfig.defaultCIF,
+);
+
+// places_service.dart — await the Edge call
+await EdgeService.sendPoiEntry(poi);  // ไม่ใช่ fire-and-forget
+```
+
+---
+
+## 15. Assurance WebSocket ปิดตัว (closeCode 1006)
+
+**ปัญหา:**  
+```
+AssuranceSession - Abnormal closure of websocket. closeCode - 1006
+```
+WebSocket connect ไปที่ `wss://connect.griffon.adobe.com` แต่ถูกปิดทันที
+
+**สาเหตุ:**  
+Norton Antivirus ทำ SSL inspection — intercept WebSocket upgrade request และตอบ HTTP 200 แทน 101 Switching Protocols ทำให้ connection fail
+
+**ยืนยัน:**
+```powershell
+$ws = [System.Net.WebSockets.ClientWebSocket]::new()
+$ws.ConnectAsync([Uri]"wss://connect.griffon.adobe.com/...", $ct).GetAwaiter().GetResult()
+# Failed: The server returned status code '200' when status code '101' was expected.
+```
+
+**วิธีแก้:**  
+Exclude `connect.griffon.adobe.com` ใน Norton → Settings → Firewall → Traffic Rules → Allow TCP port 443 to `connect.griffon.adobe.com`
+
+---
+
+## 16. Norton SSL Intercept ทำให้ Gradle ดาวน์โหลด Dependencies ไม่ได้
+
+**ปัญหา:**  
+```
+Got SSL handshake exception during request. (certificate_unknown) 
+PKIX path building failed: unable to find valid certification path
+```
+Gradle ดาวน์โหลด Maven artifacts ไม่ได้เพราะ Norton Web/Mail Shield Root CA ไม่อยู่ใน Java truststore
+
+**วิธีแก้:**  
+1. Export Norton CA certificate จาก SSL chain
+2. Import เข้า Android Studio JBR truststore
+3. Copy truststore ไปที่ path ไม่มี space
+4. Configure Gradle ให้ใช้ truststore นั้น
+
+```powershell
+# Export Norton CA
+$tcpClient.ConnectAsync("repo.maven.apache.org", 443)
+$rootCert = $chain.ChainElements[-1].Certificate
+[IO.File]::WriteAllBytes("C:\gradle_ssl\norton_ca.cer", $rootBytes)
+
+# Import เข้า JBR truststore
+keytool -import -alias "norton-ssl-inspection" -file norton_ca.cer \
+        -keystore "D:\...\jbr\lib\security\cacerts" -storepass changeit
+
+# gradle.properties
+org.gradle.jvmargs=... -Djavax.net.ssl.trustStore=C:/gradle_ssl/cacerts \
+                        -Djavax.net.ssl.trustStorePassword=changeit
+```
+
+---
+
 ## สรุป Data Flow
 
 ```
