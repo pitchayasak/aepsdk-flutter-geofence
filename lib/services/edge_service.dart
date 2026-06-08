@@ -1,4 +1,4 @@
-import 'dart:developer' as dev;
+import 'package:flutter/foundation.dart';
 import 'package:flutter_aepedge/flutter_aepedge.dart';
 import 'package:flutter_aepedgeidentity/flutter_aepedgeidentity.dart' as edge_identity;
 import '../models/poi_model.dart';
@@ -11,19 +11,15 @@ class EdgeService {
 
   /// ส่ง XDM event เมื่อเข้า POI ผ่าน Adobe Edge Network
   static Future<List<EventHandle>> sendPoiEntry(PoiModel poi) async {
-    final xdm = _buildPoiXdm(
-      eventType: 'location.entry',
-      poi: poi,
-    );
+    debugPrint('[EdgeService] sendPoiEntry called: ${poi.name} id=${poi.identifier}');
+    final xdm = _buildPoiXdm(eventType: 'location.entry', poi: poi);
     return _sendEvent(xdm);
   }
 
   /// ส่ง XDM event เมื่อออก POI ผ่าน Adobe Edge Network
   static Future<List<EventHandle>> sendPoiExit(PoiModel poi) async {
-    final xdm = _buildPoiXdm(
-      eventType: 'location.exit',
-      poi: poi,
-    );
+    debugPrint('[EdgeService] sendPoiExit called: ${poi.name} id=${poi.identifier}');
+    final xdm = _buildPoiXdm(eventType: 'location.exit', poi: poi);
     return _sendEvent(xdm);
   }
 
@@ -65,9 +61,9 @@ class EdgeService {
         if (id.isNotEmpty) map.addItem(edge_identity.IdentityItem(id, edge_identity.AuthenticatedState.AUTHENTICATED), ns);
       });
       if (!map.isEmpty()) await edge_identity.Identity.updateIdentities(map);
-      dev.log('EdgeIdentity.updateIdentities OK', name: 'EdgeService');
+      debugPrint('[EdgeService] EdgeIdentity.updateIdentities OK');
     } catch (e) {
-      dev.log('EdgeIdentity.updateIdentities failed: $e — will inject via XDM payload', name: 'EdgeService');
+      debugPrint('[EdgeService] EdgeIdentity.updateIdentities failed: $e');
     }
   }
 
@@ -163,16 +159,17 @@ class EdgeService {
     String? datasetId,
   }) async {
     try {
-      // Inject identityMap โดยตรงใน XDM เพื่อให้แน่ใจว่า identities ไปด้วยทุกครั้ง
       final xdmWithIdentity = Map<String, dynamic>.from(xdmData);
       if (_cachedIdentityMap.isNotEmpty) {
         xdmWithIdentity['identityMap'] = _cachedIdentityMap;
       }
+      debugPrint('[EdgeService] Edge.sendEvent xdm keys: ${xdmWithIdentity.keys.toList()}');
       final event = ExperienceEvent.createEvent(xdmWithIdentity, freeFormData, datasetId);
       final handles = await Edge.sendEvent(event);
+      debugPrint('[EdgeService] Edge.sendEvent OK — ${handles.length} handle(s)');
       return handles;
     } catch (e) {
-      dev.log('Edge.sendEvent failed: $e', name: 'EdgeService');
+      debugPrint('[EdgeService] Edge.sendEvent FAILED: $e');
       return [];
     }
   }
