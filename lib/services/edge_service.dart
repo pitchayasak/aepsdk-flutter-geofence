@@ -1,8 +1,12 @@
+import 'dart:developer' as dev;
 import 'package:flutter_aepedge/flutter_aepedge.dart';
 import 'package:flutter_aepedgeidentity/flutter_aepedgeidentity.dart' as edge_identity;
 import '../models/poi_model.dart';
 
 class EdgeService {
+  // เก็บ identities ที่ sync ล่าสุดไว้ใน memory
+  // เพื่อ inject เข้า XDM event payload โดยตรง (guaranteed ว่าส่งไปพร้อมกัน)
+  static Map<String, dynamic> _cachedIdentityMap = {};
   // ── Geofence Events ───────────────────────────────────────────────────────
 
   /// ส่ง XDM event เมื่อเข้า POI ผ่าน Adobe Edge Network
@@ -34,40 +38,37 @@ class EdgeService {
     String? cif,
     Map<String, String>? customIds,
   }) async {
+    // 1. Cache identities สำหรับ inject เข้า XDM โดยตรง
+    final idMap = <String, dynamic>{};
+    void addId(String ns, String id, bool primary) {
+      idMap[ns] = [{'id': id, 'authenticatedState': 'authenticated', 'primary': primary}];
+    }
+    if (email != null && email.isNotEmpty) addId('Email', email, true);
+    if (lumaCRMId != null && lumaCRMId.isNotEmpty) addId('lumaCRMId', lumaCRMId, false);
+    if (cif != null && cif.isNotEmpty) addId('CIF', cif, false);
+    customIds?.forEach((ns, id) { if (id.isNotEmpty) addId(ns, id, false); });
+    _cachedIdentityMap = idMap;
+
+    // 2. ลอง EdgeIdentity.updateIdentities() ด้วย (best-effort)
     try {
       final map = edge_identity.IdentityMap();
-
       if (email != null && email.isNotEmpty) {
-        map.addItem(
-          edge_identity.IdentityItem(email, edge_identity.AuthenticatedState.AUTHENTICATED, true),
-          'Email',
-        );
+        map.addItem(edge_identity.IdentityItem(email, edge_identity.AuthenticatedState.AUTHENTICATED, true), 'Email');
       }
       if (lumaCRMId != null && lumaCRMId.isNotEmpty) {
-        map.addItem(
-          edge_identity.IdentityItem(lumaCRMId, edge_identity.AuthenticatedState.AUTHENTICATED),
-          'lumaCRMId',
-        );
+        map.addItem(edge_identity.IdentityItem(lumaCRMId, edge_identity.AuthenticatedState.AUTHENTICATED), 'lumaCRMId');
       }
       if (cif != null && cif.isNotEmpty) {
-        map.addItem(
-          edge_identity.IdentityItem(cif, edge_identity.AuthenticatedState.AUTHENTICATED),
-          'CIF',
-        );
+        map.addItem(edge_identity.IdentityItem(cif, edge_identity.AuthenticatedState.AUTHENTICATED), 'CIF');
       }
-      customIds?.forEach((namespace, id) {
-        if (id.isNotEmpty) {
-          map.addItem(
-            edge_identity.IdentityItem(id, edge_identity.AuthenticatedState.AUTHENTICATED),
-            namespace,
-          );
-        }
+      customIds?.forEach((ns, id) {
+        if (id.isNotEmpty) map.addItem(edge_identity.IdentityItem(id, edge_identity.AuthenticatedState.AUTHENTICATED), ns);
       });
-
-      if (!map.isEmpty()) {
-        await edge_identity.Identity.updateIdentities(map);
-      }
-    } catch (_) {}
+      if (!map.isEmpty()) await edge_identity.Identity.updateIdentities(map);
+      dev.log('EdgeIdentity.updateIdentities OK', name: 'EdgeService');
+    } catch (e) {
+      dev.log('EdgeIdentity.updateIdentities failed: $e — will inject via XDM payload', name: 'EdgeService');
+    }
   }
 
   // ── Identity XDM Event (legacy sendEvent approach) ────────────────────────
@@ -164,10 +165,16 @@ class EdgeService {
     String? datasetId,
   }) async {
     try {
-      final event = ExperienceEvent.createEvent(xdmData, freeFormData, datasetId);
+      // Inject identityMap โดยตรงใน XDM เพื่อให้แน่ใจว่า identities ไปด้วยทุกครั้ง
+      final xdmWithIdentity = Map<String, dynamic>.from(xdmData);
+      if (_cachedIdentityMap.isNotEmpty) {
+        xdmWithIdentity['identityMap'] = _cachedIdentityMap;
+      }
+      final event = ExperienceEvent.createEvent(xdmWithIdentity, freeFormData, datasetId);
       final handles = await Edge.sendEvent(event);
       return handles;
-    } catch (_) {
+    } catch (e) {
+      dev.log('Edge.sendEvent failed: $e', name: 'EdgeService');
       return [];
     }
   }
