@@ -131,29 +131,27 @@ class EdgeService {
     required String eventType,
     required PoiModel poi,
   }) {
+    final isEntry = eventType == 'location.entry';
     return {
       'eventType': eventType,
       'placeContext': {
         'POIinteraction': {
-          // poiEntries/poiExits บอก AEP ว่าเป็น entry หรือ exit
-          'poiEntries': {'value': eventType == 'location.entry' ? 1 : 0},
-          'poiExits':   {'value': eventType == 'location.exit'  ? 1 : 0},
+          'poiEntries': {'value': isEntry ? 1 : 0},
+          'poiExits':   {'value': isEntry ? 0 : 1},
           'poiDetail': {
             'name': poi.name,
-            // ใช้ 'poiID' แทน 'POIID' เพื่อหลีกเลี่ยง duplicate column
             'poiID': poi.identifier,
-            'geoInteractionDetails': {
-              'distanceToCenter': 0,
-              'accuracy': poi.radius.toDouble(),
-              // ลบ _id และ _schema ออก เพราะเป็น system fields ที่ชนกัน
-              'geoShape': {
-                'circle': {
-                  'radius': poi.radius.toDouble(),
-                  'coordinates': [poi.longitude, poi.latitude],
-                }
-              }
-            }
-          }
+            // ลบ geoInteractionDetails/geoShape ออก — schema validation อาจปฏิเสธ
+            // ถ้าต้องการ geo info ให้ใส่ใน freeFormData แทน
+          },
+        },
+      },
+      // ข้อมูล geo เพิ่มเติมใน free-form data (ไม่ผ่าน XDM schema validation)
+      '_data': {
+        'poi': {
+          'latitude': poi.latitude,
+          'longitude': poi.longitude,
+          'radius': poi.radius,
         }
       },
     };
