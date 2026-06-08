@@ -44,7 +44,7 @@ class PlacesService {
     // 2. trackAction (Analytics) พร้อม POI data + identity
     await _trackGeofenceEvent('places_poi_entry', poi);
     // 3. Edge Network — XDM event ส่งตรงไป Adobe Experience Platform
-    EdgeService.sendPoiEntry(poi);
+    await EdgeService.sendPoiEntry(poi);
   }
 
   static Future<void> processExit(PoiModel poi) async {
@@ -58,7 +58,7 @@ class PlacesService {
     } catch (_) {}
 
     await _trackGeofenceEvent('places_poi_exit', poi);
-    EdgeService.sendPoiExit(poi);
+    await EdgeService.sendPoiExit(poi);
   }
 
   /// ส่ง trackAction พร้อม POI info + identity ที่มีอยู่ใน event payload

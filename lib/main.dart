@@ -3,6 +3,7 @@ import 'package:flutter_aepcore/flutter_aepcore.dart';
 
 import 'config.dart';
 import 'screens/geofence_map_screen.dart';
+import 'services/edge_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -13,12 +14,20 @@ void main() async {
 Future<void> _initSdks() async {
   try {
     await MobileCore.setLogLevel(LogLevel.debug);
-    // Places + Assurance registered natively in MainActivity.onCreate
+    // Places + Assurance + Edge registered natively in MainActivity.onCreate
     // initializeWithAppId handles Core extensions (Identity, Lifecycle, Signal)
     await MobileCore.initializeWithAppId(appId: AppConfig.adobeAppId);
   } catch (e) {
     debugPrint('AEP SDK init error: $e');
   }
+
+  // Pre-populate default identities so Edge events always include them
+  // ไม่ต้องกด Sync All ก่อนทุกครั้ง
+  await EdgeService.updateEdgeIdentities(
+    email: AppConfig.defaultEmail,
+    lumaCRMId: AppConfig.defaultLumaCRMId,
+    cif: AppConfig.defaultCIF,
+  );
 }
 
 class MyApp extends StatelessWidget {
