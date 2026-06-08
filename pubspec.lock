@@ -111,7 +111,7 @@ packages:
     source: hosted
     version: "5.0.0"
   flutter_aepedgeidentity:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: flutter_aepedgeidentity
       sha256: f14b3e4a6a8b805caacb05f081b7b0ac19f74aac1957be8db21c24f0c120ed90

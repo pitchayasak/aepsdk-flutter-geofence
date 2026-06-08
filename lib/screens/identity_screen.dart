@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_aepcore/flutter_aepcore.dart';
-import 'package:flutter_aepcore/flutter_aepidentity.dart';
+import 'package:flutter_aepcore/flutter_aepidentity.dart' as core_identity;
 import 'package:flutter_aepuserprofile/flutter_aepuserprofile.dart';
 import '../services/edge_service.dart';
 
@@ -92,7 +92,7 @@ class _IdentityTabState extends State<_IdentityTab> {
 
   Future<void> _loadEcid() async {
     try {
-      final ecid = await Identity.experienceCloudId;
+      final ecid = await core_identity.Identity.experienceCloudId;
       setState(() => _ecid = ecid);
     } catch (_) {}
   }
@@ -115,9 +115,22 @@ class _IdentityTabState extends State<_IdentityTab> {
         setState(() => _loading = false);
         return;
       }
-      await Identity.syncIdentifiersWithAuthState(
+      // 1. AEP Core Identity — สำหรับ Analytics/Places
+      await core_identity.Identity.syncIdentifiersWithAuthState(
         ids,
-        MobileVisitorAuthenticationState.authenticated,
+        core_identity.MobileVisitorAuthenticationState.authenticated,
+      );
+      // 2. Edge Identity — ทุก Edge event จะมี identities ใน identityMap อัตโนมัติ
+      //    authenticatedState = "authenticated" (ไม่ใช่ "ambiguous")
+      final customMap = Map<String, String>.from(ids)
+        ..remove('Email')
+        ..remove('lumaCRMId')
+        ..remove('CIF');
+      await EdgeService.updateEdgeIdentities(
+        email: ids['Email'],
+        lumaCRMId: ids['lumaCRMId'],
+        cif: ids['CIF'],
+        customIds: customMap.isEmpty ? null : customMap,
       );
       _snack('Synced ${ids.length} identifier(s) ✓\n${ids.entries.map((e) => '${e.key}: ${e.value}').join(', ')}');
     } catch (e) {
@@ -128,7 +141,7 @@ class _IdentityTabState extends State<_IdentityTab> {
 
   Future<void> _getIdentifiers() async {
     try {
-      final ids = await Identity.identifiers;
+      final ids = await core_identity.Identity.identifiers;
       if (!mounted) return;
       showDialog(
         context: context,
@@ -666,7 +679,7 @@ class _EdgeTabState extends State<_EdgeTab> {
         lumaCRMId: _crmCtrl.text.trim(),
         cif: _cifCtrl.text.trim(),
       );
-      _addLog('identity.update → ${handles.length} handle(s) received ✓');
+      _addLog('core_identity.Identity.update → ${handles.length} handle(s) received ✓');
     } catch (e) {
       _addLog('Error: $e');
     }
@@ -735,7 +748,7 @@ class _EdgeTabState extends State<_EdgeTab> {
               child: FilledButton.icon(
                 onPressed: _loading ? null : _sendIdentityXdm,
                 icon: const Icon(Icons.send),
-                label: const Text('Send identity.update'),
+                label: const Text('Send core_identity.Identity.update'),
                 style: FilledButton.styleFrom(backgroundColor: Colors.indigo[700]),
               ),
             ),

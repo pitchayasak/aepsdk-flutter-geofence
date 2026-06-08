@@ -1,4 +1,5 @@
 import 'package:flutter_aepedge/flutter_aepedge.dart';
+import 'package:flutter_aepedgeidentity/flutter_aepedgeidentity.dart' as edge_identity;
 import '../models/poi_model.dart';
 
 class EdgeService {
@@ -22,45 +23,89 @@ class EdgeService {
     return _sendEvent(xdm);
   }
 
-  // ── Identity Events ───────────────────────────────────────────────────────
+  // ── Edge Identity (updateIdentities) ─────────────────────────────────────
 
-  /// ส่ง Identity XDM event (email, CIF, lumaCRMId)
+  /// ลงทะเบียน identities กับ Edge Identity extension
+  /// หลังจากนี้ ทุก Edge event จะมี email/CIF/lumaCRMId ใน identityMap อัตโนมัติ
+  /// authenticatedState จะเป็น "authenticated" แทน "ambiguous"
+  static Future<void> updateEdgeIdentities({
+    String? email,
+    String? lumaCRMId,
+    String? cif,
+    Map<String, String>? customIds,
+  }) async {
+    try {
+      final map = edge_identity.IdentityMap();
+
+      if (email != null && email.isNotEmpty) {
+        map.addItem(
+          edge_identity.IdentityItem(email, edge_identity.AuthenticatedState.AUTHENTICATED, true),
+          'Email',
+        );
+      }
+      if (lumaCRMId != null && lumaCRMId.isNotEmpty) {
+        map.addItem(
+          edge_identity.IdentityItem(lumaCRMId, edge_identity.AuthenticatedState.AUTHENTICATED),
+          'lumaCRMId',
+        );
+      }
+      if (cif != null && cif.isNotEmpty) {
+        map.addItem(
+          edge_identity.IdentityItem(cif, edge_identity.AuthenticatedState.AUTHENTICATED),
+          'CIF',
+        );
+      }
+      customIds?.forEach((namespace, id) {
+        if (id.isNotEmpty) {
+          map.addItem(
+            edge_identity.IdentityItem(id, edge_identity.AuthenticatedState.AUTHENTICATED),
+            namespace,
+          );
+        }
+      });
+
+      if (!map.isEmpty()) {
+        await edge_identity.Identity.updateIdentities(map);
+      }
+    } catch (_) {}
+  }
+
+  // ── Identity XDM Event (legacy sendEvent approach) ────────────────────────
+
+  /// ส่ง identity.update XDM event (นอกจาก updateEdgeIdentities แล้ว)
   static Future<List<EventHandle>> sendIdentityEvent({
     String? email,
     String? lumaCRMId,
     String? cif,
     Map<String, String>? customIds,
   }) async {
-    final identityMap = <String, dynamic>{};
+    // 1. Update Edge Identity ก่อน → ทุก event ถัดไปจะมี identities อัตโนมัติ
+    await updateEdgeIdentities(
+      email: email,
+      lumaCRMId: lumaCRMId,
+      cif: cif,
+      customIds: customIds,
+    );
 
+    // 2. ส่ง XDM event identity.update ด้วย
+    final identityMap = <String, dynamic>{};
     if (email != null && email.isNotEmpty) {
-      identityMap['Email'] = [
-        {'id': email, 'primary': true, 'authenticatedState': 'authenticated'}
-      ];
+      identityMap['Email'] = [{'id': email, 'primary': true, 'authenticatedState': 'authenticated'}];
     }
     if (lumaCRMId != null && lumaCRMId.isNotEmpty) {
-      identityMap['lumaCRMId'] = [
-        {'id': lumaCRMId, 'authenticatedState': 'authenticated'}
-      ];
+      identityMap['lumaCRMId'] = [{'id': lumaCRMId, 'authenticatedState': 'authenticated'}];
     }
     if (cif != null && cif.isNotEmpty) {
-      identityMap['CIF'] = [
-        {'id': cif, 'authenticatedState': 'authenticated'}
-      ];
+      identityMap['CIF'] = [{'id': cif, 'authenticatedState': 'authenticated'}];
     }
     customIds?.forEach((type, value) {
       if (value.isNotEmpty) {
-        identityMap[type] = [
-          {'id': value, 'authenticatedState': 'authenticated'}
-        ];
+        identityMap[type] = [{'id': value, 'authenticatedState': 'authenticated'}];
       }
     });
 
-    final xdm = <String, dynamic>{
-      'eventType': 'identity.update',
-      'identityMap': identityMap,
-    };
-    return _sendEvent(xdm);
+    if (identityMap.isEmpty) return [];
+    return _sendEvent({'eventType': 'identity.update', 'identityMap': identityMap});
   }
 
   // ── Custom XDM Event ──────────────────────────────────────────────────────
